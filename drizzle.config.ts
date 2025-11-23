@@ -5,7 +5,6 @@ export default {
   dialect: 'postgresql',
   schema: './src/infrastructure/database/schema/*',
   out: './src/infrastructure/database/migrations',
-  driver: 'pglite',
   dbCredentials: {
     url: process.env.DATABASE_URL!,
   },
