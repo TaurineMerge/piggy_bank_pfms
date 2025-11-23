@@ -9,7 +9,7 @@ export class User {
     public lastName: string | null,
     public defaultCurrency: Currency,
     public timezone: string = 'Europe/Moscow',
-    public readonly createdAt: Date,
+    public readonly createdAt: Date = new Date(),
   ) {}
 
   get fullName(): string | null {
