@@ -14,7 +14,10 @@ import { ReportHandler } from './handlers/report.handler';
 
 // Utilities
 import { TransactionParser } from './parsers/transaction-text.parser';
+
+// Keyboards
 import { CategoryKeyboard } from './keyboards/category.keyboard';
+import { MainMenuKeyboard } from './keyboards/main-menu.keyboard';
 
 @Module({
   imports: [UserModule, TransactionModule, AccountModule, ReportModule],
@@ -30,7 +33,10 @@ import { CategoryKeyboard } from './keyboards/category.keyboard';
 
     // Utilities
     TransactionParser,
+
+    // Keyboards
     CategoryKeyboard,
+    MainMenuKeyboard,
   ],
 })
 export class TelegramModule {}
