@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import * as postgres from 'postgres';
 import * as schema from './schema';
+import { seedCategories } from './seeds/seed';
 
 @Injectable()
 export class DrizzleService implements OnModuleInit, OnModuleDestroy {
@@ -37,6 +38,10 @@ export class DrizzleService implements OnModuleInit, OnModuleDestroy {
       });
 
       await this.client`SELECT 1`;
+
+      if (this.configService.get('app.nodeEnv') === 'development') {
+        await seedCategories(this);
+      }
 
       this.logger.log('✅ Database connected (Drizzle ORM)');
     } catch (error) {
