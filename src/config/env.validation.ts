@@ -1,6 +1,7 @@
+// src/config/env.validation.ts
 import { z } from 'zod';
 
-// Validation schema for environment variables
+// Validation schema
 export const envSchema = z.object({
   // Database
   DATABASE_URL: z.string().url(),
@@ -35,10 +36,13 @@ export function validateEnv(config: Record<string, unknown>): Environment {
     return envSchema.parse(config);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const missingVars = error.errors.map((e) => e.path.join('.')).join(', ');
+      const missingVars = error.issues
+        .map((issue) => issue.path.join('.'))
+        .join(', ');
+
       throw new Error(
-        `Invalid environment variables: ${missingVars}\n` +
-          `Please check your .env file.`,
+        `❌ Invalid environment variables: ${missingVars}\n` +
+          `Details: ${error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(', ')}`,
       );
     }
     throw error;
