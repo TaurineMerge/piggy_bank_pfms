@@ -2,12 +2,16 @@ import { Injectable, Logger } from '@nestjs/common';
 import { BotContext } from '../telegram.service';
 import { UserService } from '../../../modules/user/user.service';
 import { Currency } from '../../../core/domain/value-objects/currency.vo';
+import { MainMenuKeyboard } from '../keyboards/main-menu.keyboard';
 
 @Injectable()
 export class StartHandler {
   private readonly logger = new Logger(StartHandler.name);
 
-  constructor(private userService: UserService) {}
+  constructor(
+    private userService: UserService,
+    private mainMenuKeyboard: MainMenuKeyboard,
+  ) {}
 
   async handle(ctx: BotContext): Promise<void> {
     if (!ctx.from) return;
@@ -33,12 +37,8 @@ export class StartHandler {
         `👋 Привет, ${firstName}!\n\n` +
           `Я помогу тебе вести учёт личных финансов.\n\n` +
           `Для тебя создан счёт "Основной счёт" с балансом 0 ₽.\n\n` +
-          `Попробуй команды:\n` +
-          `/add - добавить расход\n` +
-          `/balance - показать баланс\n` +
-          `/help - список всех команд\n\n` +
-          `Или просто напиши <code>500 такси</code> для быстрого добавления!`,
-        { parse_mode: 'HTML' },
+          `Используй кнопки ниже для управления финансами 👇`,
+        this.mainMenuKeyboard.build(),
       );
 
       this.logger.log(`New user created: ${telegramId}`);
@@ -47,7 +47,8 @@ export class StartHandler {
         // User already exists
         await ctx.reply(
           `С возвращением, ${firstName}! 👋\n\n` +
-            `Используй /help для списка команд.`,
+            `Выбери действие из меню ниже 👇`,
+          this.mainMenuKeyboard.build(),
         );
       } else {
         this.logger.error('Error in start handler', error);
