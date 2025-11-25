@@ -76,6 +76,17 @@ export class TelegramService implements OnModuleInit {
     this.bot.command('report', (ctx) => this.reportHandler.handle(ctx));
     this.bot.command('help', (ctx) => this.handleHelp(ctx));
 
+    this.bot.hears('💸 Добавить расход', (ctx) =>
+      this.addTransactionHandler.handleExpense(ctx),
+    );
+    this.bot.hears('💰 Добавить доход', (ctx) =>
+      this.addTransactionHandler.handleIncome(ctx),
+    );
+    this.bot.hears('💼 Баланс', (ctx) => this.balanceHandler.handle(ctx));
+    this.bot.hears('📊 Отчёт', (ctx) => this.reportHandler.handle(ctx));
+    this.bot.hears('📝 История', (ctx) => this.historyHandler.handle(ctx));
+    this.bot.hears('⚙️ Настройки', (ctx) => this.handleSettings(ctx));
+
     // Callback queries (inline buttons)
     this.bot.on('callback_query', async (ctx) => {
       if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
@@ -106,8 +117,12 @@ export class TelegramService implements OnModuleInit {
 
     // Text messages
     this.bot.on('text', async (ctx) => {
+      this.logger.debug(`Text message. Session state: ${ctx.session?.state}`);
       // If user is in the process of adding a transaction
-      if (ctx.session?.state === 'awaiting_amount') {
+      if (
+        ctx.session?.state === 'awaiting_amount' ||
+        ctx.session?.state === 'awaiting_income_amount'
+      ) {
         await this.addTransactionHandler.handleTextInput(ctx);
       } else {
         await this.addTransactionHandler.handleQuickAdd(ctx);
@@ -141,5 +156,14 @@ export class TelegramService implements OnModuleInit {
     `.trim();
 
     await ctx.reply(helpMessage, { parse_mode: 'HTML' });
+  }
+
+  private async handleSettings(ctx: BotContext) {
+    const settingsMessage = `
+⚙️ <b>Настройки</b>
+В разработке
+  `.trim();
+
+    await ctx.reply(settingsMessage, { parse_mode: 'HTML' });
   }
 }
