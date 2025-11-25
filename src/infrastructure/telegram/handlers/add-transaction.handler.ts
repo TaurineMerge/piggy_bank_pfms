@@ -26,22 +26,43 @@ export class AddTransactionHandler {
     private accountRepository: IAccountRepository,
   ) {}
 
-  async handle(ctx: BotContext): Promise<void> {
+  async handleExpense(ctx: BotContext): Promise<void> {
     if (!ctx.from) return;
 
     try {
-      const categories = [
-        { id: 'cat-food', name: '🍔 Еда', icon: '🍔' },
-        { id: 'cat-transport', name: '🚕 Транспорт', icon: '🚕' },
-        { id: 'cat-shopping', name: '🛍 Покупки', icon: '🛍' },
-        { id: 'cat-entertainment', name: '🎬 Развлечения', icon: '🎬' },
-        { id: 'cat-health', name: '💊 Здоровье', icon: '💊' },
-        { id: 'cat-other', name: '📦 Другое', icon: '📦' },
-      ];
+      const user = await this.userRepository.findByTelegramId(ctx.from.id);
+      if (!user) {
+        await ctx.reply('❌ Используй /start для начала работы');
+        return;
+      }
+
+      const categories = await this.categoryRepository.findByUserIdAndType(
+        user.id,
+        TransactionType.EXPENSE,
+      );
+
+      const finalCategories =
+        categories.length > 0
+          ? categories
+          : await this.categoryRepository
+              .findSystemCategories()
+              .then((cats) =>
+                cats.filter((c) => c.type === TransactionType.EXPENSE),
+              );
+
+      if (finalCategories.length === 0) {
+        await ctx.reply(
+          '❌ Категории не найдены. Обратитесь к администратору.',
+        );
+        return;
+      }
 
       const keyboard = Markup.inlineKeyboard(
-        categories.map((cat) => [
-          Markup.button.callback(cat.name, `add_expense:${cat.id}`),
+        finalCategories.map((cat) => [
+          Markup.button.callback(
+            `${cat.icon} ${cat.name}`,
+            `add_expense:${cat.id}`,
+          ),
         ]),
       );
 
@@ -49,9 +70,62 @@ export class AddTransactionHandler {
 
       ctx.session.state = 'awaiting_category';
     } catch (error) {
-      this.logger.error('Error in add handler', error);
+      this.logger.error('Error in handleExpense', error);
       await ctx.reply('❌ Произошла ошибка.');
     }
+  }
+
+  async handleIncome(ctx: BotContext): Promise<void> {
+    if (!ctx.from) return;
+
+    try {
+      const user = await this.userRepository.findByTelegramId(ctx.from.id);
+      if (!user) {
+        await ctx.reply('❌ Используй /start для начала работы');
+        return;
+      }
+
+      const categories = await this.categoryRepository.findByUserIdAndType(
+        user.id,
+        TransactionType.INCOME,
+      );
+
+      const finalCategories =
+        categories.length > 0
+          ? categories
+          : await this.categoryRepository
+              .findSystemCategories()
+              .then((cats) =>
+                cats.filter((c) => c.type === TransactionType.INCOME),
+              );
+
+      if (finalCategories.length === 0) {
+        await ctx.reply(
+          '❌ Категории не найдены. Обратитесь к администратору.',
+        );
+        return;
+      }
+
+      const keyboard = Markup.inlineKeyboard(
+        finalCategories.map((cat) => [
+          Markup.button.callback(
+            `${cat.icon} ${cat.name}`,
+            `add_income:${cat.id}`,
+          ),
+        ]),
+      );
+
+      await ctx.reply('💰 Выбери категорию дохода:', keyboard);
+
+      ctx.session.state = 'awaiting_income_category';
+    } catch (error) {
+      this.logger.error('Error in handleIncome', error);
+      await ctx.reply('❌ Произошла ошибка.');
+    }
+  }
+
+  async handle(ctx: BotContext): Promise<void> {
+    await this.handleExpense(ctx);
   }
 
   async handleCategorySelect(
@@ -76,11 +150,16 @@ export class AddTransactionHandler {
     categoryId: string,
   ): Promise<void> {
     ctx.session.selectedCategoryId = categoryId;
-    ctx.session.state = 'awaiting_amount';
+    ctx.session.state = 'awaiting_income_amount';
 
-    await ctx.editMessageText('💰 Введи сумму и описание дохода:', {
-      parse_mode: 'HTML',
-    });
+    await ctx.editMessageText(
+      '💰 Введи сумму и описание дохода:\n\n' +
+        '<b>Примеры:</b>\n' +
+        '<code>50000 зарплата за январь</code>\n' +
+        '<code>15000 фриланс проект</code>\n' +
+        '<code>5000 кешбэк</code>',
+      { parse_mode: 'HTML' },
+    );
   }
 
   async handleTextInput(ctx: BotContext): Promise<void> {
@@ -97,6 +176,11 @@ export class AddTransactionHandler {
       );
       return;
     }
+
+    const isIncome = ctx.session.state === 'awaiting_income_amount';
+    const transactionType = isIncome
+      ? TransactionType.INCOME
+      : TransactionType.EXPENSE;
 
     try {
       const user = await this.userRepository.findByTelegramId(ctx.from.id);
@@ -118,11 +202,14 @@ export class AddTransactionHandler {
         amount: parsed.amount,
         description: parsed.description,
         date: new Date(),
-        type: TransactionType.EXPENSE,
+        type: transactionType,
       });
 
+      const emoji = isIncome ? '✅ 💰' : '✅ 💸';
+      const typeText = isIncome ? 'Доход' : 'Расход';
+
       await ctx.reply(
-        `✅ <b>Расход добавлен!</b>\n\n` +
+        `${emoji} <b>${typeText} добавлен!</b>\n\n` +
           `💰 ${transaction.amount.format()}\n` +
           `📝 ${transaction.description}\n` +
           `📅 ${transaction.date.toLocaleDateString('ru-RU')}`,
@@ -145,7 +232,7 @@ export class AddTransactionHandler {
     const parsed = this.transactionParser.parse(text);
 
     if (!parsed) {
-      // TODO: Handle condition
+      // Не похоже на транзакцию - игнорируем
       return;
     }
 
@@ -162,11 +249,10 @@ export class AddTransactionHandler {
         return;
       }
 
-      const category = await this.categoryRepository.findByName('cat-other');
       const transaction = await this.transactionService.createTransaction({
         telegramId: ctx.from.id,
         accountId: account.id,
-        categoryId: 'cat-other', // Default category
+        categoryId: 'cat-other',
         amount: parsed.amount,
         description: parsed.description,
         date: new Date(),
