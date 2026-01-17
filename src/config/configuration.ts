@@ -6,6 +6,10 @@ export const configuration: ConfigFactory = () => ({
   },
   telegram: {
     token: process.env.TELEGRAM_BOT_TOKEN,
+    userWhitelist:
+      process.env.TELEGRAM_WHITELIST?.split(',').map((id) =>
+        parseInt(id.trim()),
+      ) || [],
   },
   app: {
     nodeEnv: process.env.NODE_ENV || 'development',
