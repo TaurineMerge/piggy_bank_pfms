@@ -8,6 +8,7 @@ export const envSchema = z.object({
 
   // Telegram
   TELEGRAM_BOT_TOKEN: z.string().min(1),
+  TELEGRAM_WHITELIST: z.string().optional().default(''),
 
   // App
   NODE_ENV: z
