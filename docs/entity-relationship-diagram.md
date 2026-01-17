@@ -1,4 +1,4 @@
-```Mermaid
+```mermaid
 erDiagram
 USERS {
 UUID id PK
