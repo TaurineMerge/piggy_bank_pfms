@@ -7,6 +7,8 @@ import { AddTransactionHandler } from './handlers/add-transaction.handler';
 import { BalanceHandler } from './handlers/balance.handler';
 import { HistoryHandler } from './handlers/history.handler';
 import { ReportHandler } from './handlers/report.handler';
+import { CategoryHandler } from './handlers/category.handler';
+import { MainMenuKeyboard } from './keyboards/main-menu.keyboard';
 
 export interface SessionData {
   state?: string;
@@ -14,6 +16,7 @@ export interface SessionData {
   selectedAccountId?: string;
   tempAmount?: number;
   tempDescription?: string;
+  previousMenu?: string;
 }
 
 export interface BotContext extends Context<Update> {
@@ -32,6 +35,8 @@ export class TelegramService implements OnModuleInit {
     private balanceHandler: BalanceHandler,
     private historyHandler: HistoryHandler,
     private reportHandler: ReportHandler,
+    private categoryHandler: CategoryHandler,
+    private mainMenuKeyboard: MainMenuKeyboard,
   ) {
     const token = this.configService.get<string>('telegram.token');
     if (!token) {
@@ -75,6 +80,7 @@ export class TelegramService implements OnModuleInit {
     this.bot.command('history', (ctx) => this.historyHandler.handle(ctx));
     this.bot.command('report', (ctx) => this.reportHandler.handle(ctx));
     this.bot.command('help', (ctx) => this.handleHelp(ctx));
+    this.bot.command('categories', (ctx) => this.categoryHandler.handle(ctx));
 
     this.bot.hears('💸 Добавить расход', (ctx) =>
       this.addTransactionHandler.handleExpense(ctx),
@@ -86,6 +92,8 @@ export class TelegramService implements OnModuleInit {
     this.bot.hears('📊 Отчёт', (ctx) => this.reportHandler.handle(ctx));
     this.bot.hears('📝 История', (ctx) => this.historyHandler.handle(ctx));
     this.bot.hears('⚙️ Настройки', (ctx) => this.handleSettings(ctx));
+    this.bot.hears('📂 Категории', (ctx) => this.categoryHandler.handle(ctx));
+    this.bot.hears('❌ Отменить', (ctx) => this.handleCancel(ctx));
 
     // Callback queries (inline buttons)
     this.bot.on('callback_query', async (ctx) => {
@@ -108,6 +116,24 @@ export class TelegramService implements OnModuleInit {
           );
         }
 
+        if (data === 'cat_list') {
+          await this.categoryHandler.handleList(ctx);
+        } else if (data === 'cat_add_expense') {
+          await this.categoryHandler.handleAddExpense(ctx);
+        } else if (data === 'cat_add_income') {
+          await this.categoryHandler.handleAddIncome(ctx);
+        } else if (data === 'cat_delete') {
+          await this.categoryHandler.handleDeleteMenu(ctx);
+        } else if (data.startsWith('cat_delete:')) {
+          const categoryId = data.split(':')[1];
+          await this.categoryHandler.handleDelete(ctx, categoryId);
+        } else if (data === 'cat_back') {
+          await this.categoryHandler.handleBack(ctx);
+        } else if (data === 'noop') {
+          await ctx.answerCbQuery();
+          return;
+        }
+
         await ctx.answerCbQuery();
       } catch (error) {
         this.logger.error('Callback query error', error);
@@ -118,8 +144,12 @@ export class TelegramService implements OnModuleInit {
     // Text messages
     this.bot.on('text', async (ctx) => {
       this.logger.debug(`Text message. Session state: ${ctx.session?.state}`);
-      // If user is in the process of adding a transaction
       if (
+        ctx.session?.state === 'awaiting_new_category_expense' ||
+        ctx.session?.state === 'awaiting_new_category_income'
+      ) {
+        await this.categoryHandler.handleNewCategoryInput(ctx);
+      } else if (
         ctx.session?.state === 'awaiting_amount' ||
         ctx.session?.state === 'awaiting_income_amount'
       ) {
@@ -165,5 +195,12 @@ export class TelegramService implements OnModuleInit {
   `.trim();
 
     await ctx.reply(settingsMessage, { parse_mode: 'HTML' });
+  }
+
+  private async handleCancel(ctx: BotContext) {
+    ctx.session.state = undefined;
+    ctx.session.selectedCategoryId = undefined;
+
+    await ctx.reply('❌ Действие отменено.', this.mainMenuKeyboard.build());
   }
 }

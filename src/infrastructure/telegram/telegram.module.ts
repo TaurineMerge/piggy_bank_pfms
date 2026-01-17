@@ -18,9 +18,18 @@ import { TransactionParser } from './parsers/transaction-text.parser';
 // Keyboards
 import { CategoryKeyboard } from './keyboards/category.keyboard';
 import { MainMenuKeyboard } from './keyboards/main-menu.keyboard';
+import { CategoryHandler } from './handlers/category.handler';
+import { CategoryModule } from 'src/modules/category/category.module';
+import { CancelKeyboard } from './keyboards/cancel.keyboard';
 
 @Module({
-  imports: [UserModule, TransactionModule, AccountModule, ReportModule],
+  imports: [
+    UserModule,
+    TransactionModule,
+    AccountModule,
+    ReportModule,
+    CategoryModule,
+  ],
   providers: [
     TelegramService,
 
@@ -30,6 +39,7 @@ import { MainMenuKeyboard } from './keyboards/main-menu.keyboard';
     BalanceHandler,
     HistoryHandler,
     ReportHandler,
+    CategoryHandler,
 
     // Utilities
     TransactionParser,
@@ -37,6 +47,7 @@ import { MainMenuKeyboard } from './keyboards/main-menu.keyboard';
     // Keyboards
     CategoryKeyboard,
     MainMenuKeyboard,
+    CancelKeyboard,
   ],
 })
 export class TelegramModule {}
