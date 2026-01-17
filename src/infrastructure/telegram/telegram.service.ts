@@ -27,6 +27,7 @@ export interface BotContext extends Context<Update> {
 export class TelegramService implements OnModuleInit {
   private bot: Telegraf<BotContext>;
   private readonly logger = new Logger(TelegramService.name);
+  private readonly userWhitelist: number[];
 
   constructor(
     private configService: ConfigService,
@@ -42,6 +43,9 @@ export class TelegramService implements OnModuleInit {
     if (!token) {
       throw new Error('TELEGRAM_BOT_TOKEN is not defined');
     }
+
+    this.userWhitelist =
+      this.configService.get<number[]>('telegram.userWhitelist') || [];
     this.bot = new Telegraf<BotContext>(token);
 
     this.initializeSession();
@@ -58,7 +62,28 @@ export class TelegramService implements OnModuleInit {
     );
   }
 
+  private async checkAuthorization(ctx: BotContext, next: () => Promise<void>) {
+    const telegramId = ctx.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (
+      this.userWhitelist.length > 0 &&
+      !this.userWhitelist.includes(telegramId)
+    ) {
+      this.logger.warn(`Unauthorized access attempt from user ${telegramId}`);
+      return;
+    }
+
+    return next();
+  }
+
   async onModuleInit() {
+    // Authorization middleware
+    this.bot.use((ctx, next) => this.checkAuthorization(ctx, next));
+
     // Session middleware
     this.bot.use(async (ctx, next) => {
       this.logger.debug(
@@ -162,6 +187,12 @@ export class TelegramService implements OnModuleInit {
     // Launch bot
     await this.bot.launch();
     this.logger.log('Telegram bot started successfully');
+    this.logger.log(
+      `Whitelist enabled: ${this.userWhitelist.length > 0 ? 'Yes' : 'No'}`,
+    );
+    if (this.userWhitelist.length > 0) {
+      this.logger.log(`Allowed users: ${this.userWhitelist.join(', ')}`);
+    }
 
     // Graceful shutdown
     process.once('SIGINT', () => this.bot.stop('SIGINT'));
