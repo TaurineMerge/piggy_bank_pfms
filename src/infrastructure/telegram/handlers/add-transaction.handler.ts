@@ -7,6 +7,7 @@ import { ICategoryRepository } from '../../../core/domain/repositories/category.
 import { IUserRepository } from '../../../core/domain/repositories/user.repository.interface';
 import { IAccountRepository } from '../../../core/domain/repositories/account.repository.interface';
 import { Markup } from 'telegraf';
+import { CancelKeyboard } from '../keyboards/cancel.keyboard';
 
 @Injectable()
 export class AddTransactionHandler {
@@ -15,6 +16,7 @@ export class AddTransactionHandler {
   constructor(
     private transactionService: TransactionService,
     private transactionParser: TransactionParser,
+    private cancelKeyboard: CancelKeyboard,
 
     @Inject('CATEGORY_REPOSITORY')
     private categoryRepository: ICategoryRepository,
@@ -36,21 +38,20 @@ export class AddTransactionHandler {
         return;
       }
 
-      const categories = await this.categoryRepository.findByUserIdAndType(
+      const userCategories = await this.categoryRepository.findByUserIdAndType(
         user.id,
         TransactionType.EXPENSE,
       );
 
-      const finalCategories =
-        categories.length > 0
-          ? categories
-          : await this.categoryRepository
-              .findSystemCategories()
-              .then((cats) =>
-                cats.filter((c) => c.type === TransactionType.EXPENSE),
-              );
+      const systemCategories =
+        await this.categoryRepository.findSystemCategories();
+      const systemExpenseCategories = systemCategories.filter(
+        (c) => c.type === TransactionType.EXPENSE,
+      );
 
-      if (finalCategories.length === 0) {
+      const allCategories = [...userCategories, ...systemExpenseCategories];
+
+      if (allCategories.length === 0) {
         await ctx.reply(
           '❌ Категории не найдены. Обратитесь к администратору.',
         );
@@ -58,7 +59,7 @@ export class AddTransactionHandler {
       }
 
       const keyboard = Markup.inlineKeyboard(
-        finalCategories.map((cat) => [
+        allCategories.map((cat) => [
           Markup.button.callback(
             `${cat.icon} ${cat.name}`,
             `add_expense:${cat.id}`,
@@ -85,21 +86,20 @@ export class AddTransactionHandler {
         return;
       }
 
-      const categories = await this.categoryRepository.findByUserIdAndType(
+      const userCategories = await this.categoryRepository.findByUserIdAndType(
         user.id,
         TransactionType.INCOME,
       );
 
-      const finalCategories =
-        categories.length > 0
-          ? categories
-          : await this.categoryRepository
-              .findSystemCategories()
-              .then((cats) =>
-                cats.filter((c) => c.type === TransactionType.INCOME),
-              );
+      const systemCategories =
+        await this.categoryRepository.findSystemCategories();
+      const systemIncomeCategories = systemCategories.filter(
+        (c) => c.type === TransactionType.INCOME,
+      );
 
-      if (finalCategories.length === 0) {
+      const allCategories = [...userCategories, ...systemIncomeCategories];
+
+      if (allCategories.length === 0) {
         await ctx.reply(
           '❌ Категории не найдены. Обратитесь к администратору.',
         );
@@ -107,7 +107,7 @@ export class AddTransactionHandler {
       }
 
       const keyboard = Markup.inlineKeyboard(
-        finalCategories.map((cat) => [
+        allCategories.map((cat) => [
           Markup.button.callback(
             `${cat.icon} ${cat.name}`,
             `add_income:${cat.id}`,
@@ -143,6 +143,11 @@ export class AddTransactionHandler {
         '<code>3500 оплата интернета</code>',
       { parse_mode: 'HTML' },
     );
+
+    await ctx.reply(
+      '👇 Введи сумму и описание или нажми отмену:',
+      this.cancelKeyboard.build(),
+    );
   }
 
   async handleIncomeCategory(
@@ -159,6 +164,11 @@ export class AddTransactionHandler {
         '<code>15000 фриланс проект</code>\n' +
         '<code>5000 кешбэк</code>',
       { parse_mode: 'HTML' },
+    );
+
+    await ctx.reply(
+      '👇 Введи сумму и описание или нажми отмену:',
+      this.cancelKeyboard.build(),
     );
   }
 
@@ -216,7 +226,6 @@ export class AddTransactionHandler {
         { parse_mode: 'HTML' },
       );
 
-      // Очищаем состояние
       ctx.session.state = undefined;
       ctx.session.selectedCategoryId = undefined;
     } catch (error: any) {
@@ -232,7 +241,6 @@ export class AddTransactionHandler {
     const parsed = this.transactionParser.parse(text);
 
     if (!parsed) {
-      // Не похоже на транзакцию - игнорируем
       return;
     }
 
